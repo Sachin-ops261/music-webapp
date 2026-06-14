@@ -18,6 +18,11 @@ app.use(express.static(path.join(__dirname, '../public')));
 const songRoutes = require('./routes/songs');
 app.use('/api/songs', songRoutes);
 
+// Serve service worker
+app.get('/sw.js', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/sw.js'));
+});
+
 //serve frontend for any other route
 app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));
