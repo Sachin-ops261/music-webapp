@@ -104,19 +104,18 @@ function filterSongs() {
 
 // ─── Play Song ───
 function playSong(url, title, artist, id) {
-  const audio = document.getElementById("audio-player");
+  const audio = document.getElementById('audio-player');
   audio.src = url;
   audio.play();
-  document.getElementById("player-title").textContent = title;
-  document.getElementById("player-artist").textContent = artist;
+  requestWakeLock(); // ← add this
+  document.getElementById('player-title').textContent = title;
+  document.getElementById('player-artist').textContent = artist;
 
-  document
-    .querySelectorAll(".song-item")
-    .forEach((s) => s.classList.remove("playing"));
+  document.querySelectorAll('.song-item').forEach(s => s.classList.remove('playing'));
   const el = document.getElementById(`song-${id}`);
-  if (el) el.classList.add("playing");
+  if (el) el.classList.add('playing');
 
-  currentIndex = allSongs.findIndex((s) => s.id === id);
+  currentIndex = allSongs.findIndex(s => s.id === id);
   updateMediaSession(title, artist);
 }
 
@@ -322,25 +321,31 @@ function startPositionTracking() {
   }, 1000);
 }
 
-// Keep audio context alive on mobile
-let silentAudio = null;
+// Wake Lock - prevents browser from sleeping
+let wakeLock = null;
 
-function keepAudioAlive() {
-  if (silentAudio) return;
-  
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return;
+async function requestWakeLock() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('Wake Lock active ✅');
+    
+    wakeLock.addEventListener('release', async () => {
+      // Re-request wake lock if song is still playing
+      const audio = document.getElementById('audio-player');
+      if (!audio.paused) {
+        await requestWakeLock();
+      }
+    });
+  } catch (err) {
+    console.log('Wake Lock error:', err);
+  }
+}
 
-  const ctx = new AudioContext();
-  const oscillator = ctx.createOscillator();
-  const gain = ctx.createGain();
-  
-  gain.gain.value = 0; // completely silent
-  oscillator.connect(gain);
-  gain.connect(ctx.destination);
-  oscillator.start();
-  
-  silentAudio = ctx;
+async function releaseWakeLock() {
+  if (wakeLock) {
+    await wakeLock.release();
+    wakeLock = null;
+  }
 }
 
 // Call when user first interacts
@@ -393,3 +398,12 @@ function playSongFromEl(el) {
   const id = parseInt(el.dataset.id);
   playSong(url, title, artist, id);
 }
+
+// Release wake lock when paused, request when playing
+document.getElementById('audio-player').addEventListener('pause', () => {
+  releaseWakeLock();
+});
+
+document.getElementById('audio-player').addEventListener('play', () => {
+  requestWakeLock();
+});
