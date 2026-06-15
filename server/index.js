@@ -14,6 +14,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Block AppsGeyser and other unwanted wrappers
+app.use((req, res, next) => {
+  const userAgent = req.headers['user-agent'] || '';
+  const referer = req.headers['referer'] || '';
+  
+  if (referer.includes('appsgeyser') || userAgent.includes('AppMaker')) {
+    return res.status(403).send('Access denied');
+  }
+  next();
+});
+
 //routes
 const songRoutes = require('./routes/songs');
 app.use('/api/songs', songRoutes);

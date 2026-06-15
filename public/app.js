@@ -322,6 +322,32 @@ function startPositionTracking() {
   }, 1000);
 }
 
+// Keep audio context alive on mobile
+let silentAudio = null;
+
+function keepAudioAlive() {
+  if (silentAudio) return;
+  
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+
+  const ctx = new AudioContext();
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  
+  gain.gain.value = 0; // completely silent
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+  oscillator.start();
+  
+  silentAudio = ctx;
+}
+
+// Call when user first interacts
+document.addEventListener('click', () => {
+  keepAudioAlive();
+}, { once: true });
+
 // ─── Spacebar ───
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
