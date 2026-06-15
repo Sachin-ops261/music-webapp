@@ -12,7 +12,6 @@ const PORT = process.env.PORT || 3000;
 //middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
 
 // Block AppsGeyser and other unwanted wrappers
 app.use((req, res, next) => {
@@ -24,6 +23,10 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+
+app.use(express.static(path.join(__dirname, '../public')));
+
 
 //routes
 const songRoutes = require('./routes/songs');

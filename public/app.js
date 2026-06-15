@@ -350,7 +350,6 @@ async function releaseWakeLock() {
 
 // Call when user first interacts
 document.addEventListener('click', () => {
-  keepAudioAlive();
 }, { once: true });
 
 // ─── Spacebar ───
