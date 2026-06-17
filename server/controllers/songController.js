@@ -3,7 +3,7 @@ const db = require('../config/db');
 
 exports.getAllSongs = async (req, res) => {
   try {
-    const limit = 20;
+    const limit = 100;
     const offset = parseInt(req.query.offset) || 0;
     const search = req.query.search || '';
 
