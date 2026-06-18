@@ -1,47 +1,77 @@
-const { Innertube } = require('youtubei.js');
+// controllers/youtubeController.js
+// Uses YouTube's internal web API directly via fetch — no heavy dependencies,
+// works in Vercel serverless, no cold start issues.
 
-// Module-level singleton — survives warm Vercel invocations
-let yt = null;
-let initializingPromise = null;
+const YT_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'; // public YouTube web client key
 
-async function getYouTubeClient() {
-  // Return cached instance immediately if available
-  if (yt) return yt;
-  
-  // If already initializing, wait for that promise
-  if (initializingPromise) return initializingPromise;
-  
-  initializingPromise = Innertube.create({
-    generate_session_locally: true,
-    fetch: (input, init) => {
-      // Add a timeout to prevent hanging on Vercel
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      return fetch(input, { ...init, signal: controller.signal })
-        .finally(() => clearTimeout(timeout));
-    },
-  }).then((instance) => {
-    yt = instance;
-    initializingPromise = null;
-    return yt;
-  }).catch((err) => {
-    initializingPromise = null;
-    yt = null;
-    throw err;
-  });
+const YT_HEADERS = {
+  'Content-Type': 'application/json',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'X-YouTube-Client-Name': '1',
+  'X-YouTube-Client-Version': '2.20231121.09.00',
+};
 
-  return initializingPromise;
+function extractVideos(items) {
+  const results = [];
+  for (const item of items) {
+    const vr = item.videoRenderer || item.compactVideoRenderer;
+    if (!vr || !vr.videoId) continue;
+
+    const title =
+      vr.title?.runs?.[0]?.text ||
+      vr.title?.simpleText ||
+      'Unknown Title';
+
+    const artist =
+      vr.ownerText?.runs?.[0]?.text ||
+      vr.shortBylineText?.runs?.[0]?.text ||
+      'Unknown Artist';
+
+    const durationText =
+      vr.lengthText?.simpleText ||
+      vr.lengthText?.runs?.[0]?.text ||
+      '0:00';
+
+    const parts = durationText.split(':').map(Number);
+    const durationSeconds =
+      parts.length === 3
+        ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+        : parts.length === 2
+        ? parts[0] * 60 + parts[1]
+        : 0;
+
+    const thumbnails = vr.thumbnail?.thumbnails || [];
+    const thumbnail =
+      thumbnails[thumbnails.length - 1]?.url ||
+      thumbnails[0]?.url ||
+      '';
+
+    results.push({
+      id: vr.videoId,
+      title,
+      artist,
+      duration: durationSeconds,
+      thumbnail,
+      type: 'youtube',
+    });
+  }
+  return results;
 }
 
-function mapVideo(item) {
-  return {
-    id: item.id || item.video_id,
-    title: item.title?.text || item.title || 'Unknown Title',
-    artist: item.author?.name || item.channel?.name || 'Unknown Artist',
-    duration: item.duration?.seconds || 0,
-    thumbnail: item.thumbnails?.[0]?.url || '',
-    type: 'youtube',
-  };
+function walkContents(obj, results = []) {
+  if (Array.isArray(obj)) {
+    for (const item of obj) walkContents(item, results);
+  } else if (obj && typeof obj === 'object') {
+    if (obj.videoRenderer || obj.compactVideoRenderer) {
+      results.push(obj);
+    } else {
+      for (const val of Object.values(obj)) {
+        walkContents(val, results);
+      }
+    }
+  }
+  return results;
 }
 
 exports.searchSongs = async (req, res) => {
@@ -49,96 +79,132 @@ exports.searchSongs = async (req, res) => {
     const { query } = req.params;
     if (!query) return res.status(400).json({ error: 'Search query is required' });
 
-    const youtube = await getYouTubeClient();
-    const search = await youtube.search(query, { type: 'video' });
-    const results = (search.results || [])
-      .filter(item => item.type === 'Video')
-      .slice(0, 20)
-      .map(mapVideo);
+    const response = await fetch(
+      `https://www.youtube.com/youtubei/v1/search?key=${YT_API_KEY}`,
+      {
+        method: 'POST',
+        headers: YT_HEADERS,
+        body: JSON.stringify({
+          query,
+          params: 'EgIQAQ%3D%3D', // filter: videos only
+          context: {
+            client: {
+              clientName: 'WEB',
+              clientVersion: '2.20231121.09.00',
+              hl: 'en',
+              gl: 'US',
+            },
+          },
+        }),
+      }
+    );
 
-    res.json({ songs: results });
+    const data = await response.json();
+    const rawItems = walkContents(data?.contents || data?.onResponseReceivedCommands || {});
+    const songs = extractVideos(rawItems).slice(0, 20);
+
+    res.json({ songs });
   } catch (err) {
     console.error('YouTube search error:', err.message);
     res.status(500).json({ error: 'Search failed: ' + err.message });
   }
 };
 
+exports.getTrending = async (req, res) => {
+  try {
+    const response = await fetch(
+      `https://www.youtube.com/youtubei/v1/search?key=${YT_API_KEY}`,
+      {
+        method: 'POST',
+        headers: YT_HEADERS,
+        body: JSON.stringify({
+          query: 'top music hits 2025',
+          params: 'EgIQAQ%3D%3D',
+          context: {
+            client: {
+              clientName: 'WEB',
+              clientVersion: '2.20231121.09.00',
+              hl: 'en',
+              gl: 'US',
+            },
+          },
+        }),
+      }
+    );
+
+    const data = await response.json();
+    const rawItems = walkContents(data?.contents || data?.onResponseReceivedCommands || {});
+    const songs = extractVideos(rawItems).slice(0, 20);
+
+    res.json({ songs });
+  } catch (err) {
+    console.error('YouTube trending error:', err.message);
+    res.status(500).json({ error: 'Trending failed: ' + err.message });
+  }
+};
+
 exports.getStreamUrl = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!id) return res.status(400).json({ error: 'Video ID is required' });
+    if (!id) return res.status(400).json({ error: 'Video ID required' });
 
-    const youtube = await getYouTubeClient();
-    const info = await youtube.getInfo(id);
+    // Get video info using YouTube's player endpoint
+    const response = await fetch(
+      `https://www.youtube.com/youtubei/v1/player?key=${YT_API_KEY}`,
+      {
+        method: 'POST',
+        headers: YT_HEADERS,
+        body: JSON.stringify({
+          videoId: id,
+          context: {
+            client: {
+              clientName: 'ANDROID',
+              clientVersion: '17.31.35',
+              androidSdkVersion: 30,
+              hl: 'en',
+              gl: 'US',
+              utcOffsetMinutes: 0,
+            },
+          },
+        }),
+      }
+    );
 
-    // Try multiple strategies to get audio format
-    let format = null;
-    const adaptive = info.streaming_data?.adaptive_formats || [];
-    const audioFormats = adaptive
-      .filter(f => f.has_audio && !f.has_video)
+    const data = await response.json();
+
+    if (!data.streamingData) {
+      return res.status(404).json({ error: 'No streaming data found' });
+    }
+
+    // Get audio-only formats, sorted by bitrate
+    const audioFormats = (data.streamingData.adaptiveFormats || [])
+      .filter(f => f.mimeType?.startsWith('audio/') && f.url)
       .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
 
-    if (audioFormats.length > 0) {
-      format = audioFormats[0];
-    } else {
-      try {
-        format = info.chooseFormat({ type: 'audio', quality: 'best' });
-      } catch (e) {
-        const allFormats = info.streaming_data?.formats || [];
-        format = allFormats[0] || null;
-      }
+    // Fall back to regular formats if no adaptive audio
+    const regularFormats = (data.streamingData.formats || [])
+      .filter(f => f.url)
+      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+
+    const format = audioFormats[0] || regularFormats[0];
+
+    if (!format || !format.url) {
+      return res.status(404).json({ error: 'No playable audio stream found' });
     }
 
-    if (!format) {
-      return res.status(404).json({ error: 'No audio stream found' });
-    }
-
-    // Try all decipher strategies
-    let streamUrl = null;
-    const strategies = [
-      () => format.decipher(youtube.session.player),
-      () => format.decipher(),
-      () => format.url,
-    ];
-
-    for (const strategy of strategies) {
-      try {
-        streamUrl = strategy();
-        if (streamUrl) break;
-      } catch (e) {
-        continue;
-      }
-    }
-
-    if (!streamUrl) {
-      return res.status(500).json({ error: 'Could not decipher stream URL' });
-    }
+    const basicInfo = data.videoDetails || {};
+    const thumbnail =
+      basicInfo.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
 
     res.json({
-      url: streamUrl,
-      title: info.basic_info?.title || 'Unknown Title',
-      artist: info.basic_info?.author || 'Unknown Artist',
-      duration: info.basic_info?.duration || 0,
-      thumbnail: info.basic_info?.thumbnail?.[0]?.url || '',
+      url: format.url,
+      title: basicInfo.title || 'Unknown Title',
+      artist: basicInfo.author || 'Unknown Artist',
+      duration: parseInt(basicInfo.lengthSeconds || '0'),
+      thumbnail,
     });
   } catch (err) {
     console.error('YouTube stream error:', err.message);
     res.status(500).json({ error: 'Stream failed: ' + err.message });
-  }
-};
-
-exports.getTrending = async (req, res) => {
-  try {
-    const youtube = await getYouTubeClient();
-    const search = await youtube.search('top music 2025', { type: 'video' });
-    const results = (search.results || [])
-      .filter(item => item.type === 'Video')
-      .slice(0, 20)
-      .map(mapVideo);
-
-    res.json({ songs: results });
-  } catch (err) {
-    console.error('YouTube trending error:', err.message);
-    res.status(500).json({ error: 'Trending failed: ' + err.message });
   }
 };
