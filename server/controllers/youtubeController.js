@@ -88,7 +88,7 @@ exports.getStreamUrl = async (req, res) => {
       title: info.basic_info.title,
       artist: info.basic_info.author,
       duration: info.basic_info.duration,
-      thumbnail: info.basic_info.thumbnail?.[0]?.url || info.basic_info.thumbnail?.[1]?.url || '',
+      thumbnail: info.basic_info.thumbnail?.[0]?.url || info.basic_info.thumbnail?.[1]?.url,
     });
   } catch (err) {
     console.error('YouTube stream error:', err);
