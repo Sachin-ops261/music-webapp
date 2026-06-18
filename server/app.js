@@ -1,16 +1,25 @@
 const express = require('express');
 const cors = require('cors');
-// ✅ DELETED: const db = require('./config/db');
 const songRoutes = require('./routes/songs');
 const youtubeRoutes = require('./routes/youtube');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// Explicit CORS config — required for Vercel serverless
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+
+// Handle OPTIONS preflight for all routes
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 
-// Block AppsGeyser
+// Block unwanted wrappers
 app.use((req, res, next) => {
   const userAgent = req.headers['user-agent'] || '';
   const referer = req.headers['referer'] || '';
@@ -20,9 +29,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
 app.use('/api/songs', songRoutes);
 app.use('/api/youtube', youtubeRoutes);
 
-// Export for Vercel
 module.exports = app;
