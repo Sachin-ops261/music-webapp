@@ -1,51 +1,51 @@
-const { Innertube, UniversalCache } = require('youtubei.js');
+const { Innertube } = require('youtubei.js');
 
+// Global cache for serverless - persists across invocations
 let yt;
-let ytClient;
+let ytPromise;
 
-// Initialize YouTube client
 async function getYouTubeClient() {
-  if (!yt) {
-    yt = await Innertube.create({
-      cache: new UniversalCache(false),
+  // Return existing instance if available
+  if (yt) {
+    return yt;
+  }
+  
+  // Prevent race conditions - only create one promise
+  if (!ytPromise) {
+    ytPromise = Innertube.create({
       generate_session_locally: true,
+    }).then(instance => {
+      yt = instance;
+      ytPromise = null; // Clear promise after creation
+      return yt;
     });
   }
-  return yt;
+  
+  return ytPromise;
 }
 
 exports.searchSongs = async (req, res) => {
   try {
-    const { query, offset = 0 } = req.params;
-    const limit = parseInt(req.query.limit) || 20;
-    
+    const { query } = req.params;
     if (!query) {
       return res.status(400).json({ error: 'Search query is required' });
     }
 
     const youtube = await getYouTubeClient();
-    
-    // Search for music videos
-    const search = await youtube.search(query, {
-      type: 'video',
-      duration: 'any',
-    });
+    const search = await youtube.search(query, { type: 'video' });
 
-    const results = search.results.slice(0, limit).map((item) => ({
-      id: item.id,
-      title: item.title.text,
-      artist: item.author?.name || 'Unknown Artist',
-      duration: item.duration?.seconds || 0,
-      thumbnail: item.thumbnails?.[0]?.url,
-      type: 'youtube',
-    }));
+    const results = (search.results || [])
+      .filter(item => item.type === 'Video')
+      .map((item) => ({
+        id: item.id,
+        title: item.title?.text || 'Unknown Title',
+        artist: item.author?.name || 'Unknown Artist',
+        duration: item.duration?.seconds || 0,
+        thumbnail: item.thumbnails?.[0]?.url,
+        type: 'youtube',
+      }));
 
-    res.json({
-      songs: results,
-      total: results.length,
-      offset: parseInt(offset),
-      limit,
-    });
+    res.json({ songs: results });
   } catch (err) {
     console.error('YouTube search error:', err);
     res.status(500).json({ error: 'Failed to search YouTube Music' });
@@ -55,56 +55,48 @@ exports.searchSongs = async (req, res) => {
 exports.getStreamUrl = async (req, res) => {
   try {
     const { id } = req.params;
-
     const youtube = await getYouTubeClient();
     const info = await youtube.getInfo(id);
     
-    // Get the best audio stream
-    const audioStream = info.streaming_data?.adaptive_formats.find(
-      (format) => format.mime_type.includes('audio')
-    );
+    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
 
-    if (!audioStream) {
+    if (!format) {
       return res.status(404).json({ error: 'No audio stream found' });
     }
 
-    // Get the deciphered URL
-    const streamUrl = audioStream.decipher(yt.session.player);
+    const streamUrl = format.decipher ? format.decipher(youtube.session.player) : format.url;
 
     res.json({ 
       url: streamUrl,
       title: info.basic_info.title,
       artist: info.basic_info.author,
       duration: info.basic_info.duration,
-      thumbnail: info.basic_info.thumbnail?.[0]?.url,
+      thumbnail: info.basic_info.thumbnail?.[0]?.url || info.basic_info.thumbnail?.[1]?.url,
     });
   } catch (err) {
     console.error('YouTube stream error:', err);
-    res.status(500).json({ error: 'Failed to get stream URL' });
+    res.status(500).json({ error: 'Failed to get stream URL: ' + err.message });
   }
 };
 
 exports.getTrending = async (req, res) => {
   try {
     const youtube = await getYouTubeClient();
+    const search = await youtube.search('popular music 2024', { type: 'video' });
     
-    // Get trending music
-    const feed = await youtube.getTrending();
-    const musicVideos = feed.videos?.slice(0, 20) || [];
+    const results = (search.results || [])
+      .filter(item => item.type === 'Video')
+      .slice(0, 20)
+      .map((item) => ({
+        id: item.id,
+        title: item.title?.text || 'Unknown Title',
+        artist: item.author?.name || 'Unknown Artist',
+        duration: item.duration?.seconds || 0,
+        thumbnail: item.thumbnails?.[0]?.url,
+        type: 'youtube',
+      }));
 
-    const results = musicVideos.map((item) => ({
-      id: item.id,
-      title: item.title.text,
-      artist: item.author?.name || 'Unknown Artist',
-      duration: item.duration?.seconds || 0,
-      thumbnail: item.thumbnails?.[0]?.url,
-      type: 'youtube',
-    }));
-
-    res.json({
-      songs: results,
-      total: results.length,
-    });
+    res.json({ songs: results });
   } catch (err) {
     console.error('YouTube trending error:', err);
     res.status(500).json({ error: 'Failed to get trending music' });

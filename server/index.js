@@ -24,8 +24,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, '../public')));
-
 //routes
 const songRoutes = require('./routes/songs');
 app.use('/api/songs', songRoutes);
@@ -33,16 +31,6 @@ app.use('/api/songs', songRoutes);
 // ✅ ADD YOUTUBE ROUTES HERE (BEFORE THE CATCH-ALL ROUTE!)
 const youtubeRoutes = require('./routes/youtube');
 app.use('/api/youtube', youtubeRoutes);
-
-// Serve service worker
-app.get('/sw.js', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/sw.js'));
-});
-
-//serve frontend for any other route (CATCH-ALL MUST BE LAST)
-app.get('/{*path}', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/index.html'));
-});
 
 //start server
 app.listen(PORT, () => {
