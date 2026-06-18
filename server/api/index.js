@@ -1,11 +1,10 @@
-const app = require('../vercel');
+const app = require('../app'); // Changed from '../vercel'
 
-// Vercel serverless handler
 module.exports = async (req, res) => {
   await app(req, res);
 };
 
-// Start the server if this file is run directly (for local testing)
+// For local testing
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
