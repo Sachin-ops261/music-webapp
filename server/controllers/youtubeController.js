@@ -1,6 +1,6 @@
 const { Innertube } = require('youtubei.js');
 
-// Global cache for serverless - persists across invocations
+// Global cache for serverless
 let yt;
 let ytPromise;
 
@@ -15,7 +15,7 @@ async function getYouTubeClient() {
       ytPromise = null;
       return yt;
     }).catch(err => {
-      ytPromise = null; // Reset promise on failure so it can retry next request
+      ytPromise = null;
       throw err;
     });
   }
@@ -59,10 +59,8 @@ exports.getStreamUrl = async (req, res) => {
     
     let format;
     try {
-      // Try standard method first
       format = info.chooseFormat({ type: 'audio', quality: 'best' });
     } catch (e) {
-      // Fallback for v17 if chooseFormat fails
       const audioFormats = info.streaming_data?.adaptive_formats?.filter(f => f.has_audio);
       if (audioFormats && audioFormats.length > 0) {
         format = audioFormats[0];
@@ -73,14 +71,12 @@ exports.getStreamUrl = async (req, res) => {
       return res.status(404).json({ error: 'No audio stream found' });
     }
 
-    // FIX: In youtubei.js v17, decipher() takes NO arguments.
-    // We use a try-catch to handle both v17 and older versions safely.
+    // ✅ FIX: youtubei.js v17 uses decipher() with NO arguments
     let streamUrl;
     try {
       streamUrl = format.decipher ? format.decipher() : format.url;
     } catch (e) {
       try {
-        // Fallback for older versions of youtubei.js
         streamUrl = format.decipher(youtube.session.player);
       } catch (e2) {
         streamUrl = format.url;

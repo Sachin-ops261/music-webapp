@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const db = require('./config/db');
+// ✅ DELETED: const db = require('./config/db');
 const songRoutes = require('./routes/songs');
 const youtubeRoutes = require('./routes/youtube');
 
@@ -14,7 +14,6 @@ app.use(express.json());
 app.use((req, res, next) => {
   const userAgent = req.headers['user-agent'] || '';
   const referer = req.headers['referer'] || '';
-  
   if (referer.includes('appsgeyser') || userAgent.includes('AppMaker')) {
     return res.status(403).send('Access denied');
   }

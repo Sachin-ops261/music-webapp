@@ -14,9 +14,6 @@ pool.on('error', (err) => {
   console.error('Database connection lost, will reconnect on next query:', err.message);
 });
 
-// Test connection without holding a client open
-// pool.query('SELECT 1')
-//   .then(() => console.log('PostgreSQL connected ✅'))
-//   .catch(err => console.error('PostgreSQL connection error:', err));
+// ✅ REMOVED THE pool.query('SELECT 1') TEST - IT CRASHES VERCEL
 
 module.exports = pool;
