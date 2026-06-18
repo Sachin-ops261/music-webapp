@@ -71,7 +71,7 @@ exports.getStreamUrl = async (req, res) => {
       return res.status(404).json({ error: 'No audio stream found' });
     }
 
-    // ✅ FIX: youtubei.js v17 uses decipher() with NO arguments
+    // FIX: youtubei.js v17 uses decipher() with NO arguments
     let streamUrl;
     try {
       streamUrl = format.decipher ? format.decipher() : format.url;
@@ -88,7 +88,7 @@ exports.getStreamUrl = async (req, res) => {
       title: info.basic_info.title,
       artist: info.basic_info.author,
       duration: info.basic_info.duration,
-      thumbnail: info.basic_info.thumbnail?.[0]?.url || info.basic_info.thumbnail?.[1]?.url,
+      thumbnail: info.basic_info.thumbnail?.[0]?.url || info.basic_info.thumbnail?.[1]?.url || '',
     });
   } catch (err) {
     console.error('YouTube stream error:', err);
