@@ -15,8 +15,8 @@ pool.on('error', (err) => {
 });
 
 // Test connection without holding a client open
-pool.query('SELECT 1')
-  .then(() => console.log('PostgreSQL connected ✅'))
-  .catch(err => console.error('PostgreSQL connection error:', err));
+// pool.query('SELECT 1')
+//   .then(() => console.log('PostgreSQL connected ✅'))
+//   .catch(err => console.error('PostgreSQL connection error:', err));
 
 module.exports = pool;
