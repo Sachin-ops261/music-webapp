@@ -1,7 +1,7 @@
 // controllers/youtubeController.js
-// Uses YouTube's internal web API directly via fetch — no heavy dependencies,
-// works in Vercel serverless, no cold start issues.
+// Uses YouTube's internal web API directly via fetch and play-dl for reliable stream discovery.
 
+const play = require('play-dl');
 const YT_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'; // public YouTube web client key
 
 const YT_HEADERS = {
@@ -148,63 +148,39 @@ exports.getStreamUrl = async (req, res) => {
     const { id } = req.params;
     if (!id) return res.status(400).json({ error: 'Video ID required' });
 
-    // Get video info using YouTube's player endpoint
-    const response = await fetch(
-      `https://www.youtube.com/youtubei/v1/player?key=${YT_API_KEY}`,
-      {
-        method: 'POST',
-        headers: YT_HEADERS,
-        body: JSON.stringify({
-          videoId: id,
-          context: {
-            client: {
-              clientName: 'ANDROID',
-              clientVersion: '17.31.35',
-              androidSdkVersion: 30,
-              hl: 'en',
-              gl: 'US',
-              utcOffsetMinutes: 0,
-            },
-          },
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!data.streamingData) {
-      return res.status(404).json({ error: 'No streaming data found' });
+    const videoUrl = `https://www.youtube.com/watch?v=${id}`;
+    if (!play.yt_validate(videoUrl)) {
+      return res.status(400).json({ error: 'Invalid YouTube video ID' });
     }
 
-    // Get audio-only formats, sorted by bitrate
-    const audioFormats = (data.streamingData.adaptiveFormats || [])
-      .filter(f => f.mimeType?.startsWith('audio/') && f.url)
-      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+    const info = await play.video_info(videoUrl);
+    const playableFormats = info.format.filter(f => {
+      if (!f.url) return false;
+      const isAudioOnly = f.mimeType?.startsWith('audio/');
+      const hasAudioTrack = f.hasAudio || /audio/i.test(f.mimeType || '');
+      return isAudioOnly || hasAudioTrack;
+    });
 
-    // Fall back to regular formats if no adaptive audio
-    const regularFormats = (data.streamingData.formats || [])
-      .filter(f => f.url)
-      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-
-    const format = audioFormats[0] || regularFormats[0];
+    const format = playableFormats
+      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0] || info.format.find(f => f.url);
 
     if (!format || !format.url) {
-      return res.status(404).json({ error: 'No playable audio stream found' });
+      return res.status(404).json({ error: 'No playable stream found' });
     }
 
-    const basicInfo = data.videoDetails || {};
-    const thumbnail =
-      basicInfo.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
+    const basicInfo = info.video_details || {};
+    const thumbnail = basicInfo.thumbnails?.slice(-1)[0]?.url || '';
 
     res.json({
       url: format.url,
+      mimeType: format.mimeType || 'audio/mpeg',
       title: basicInfo.title || 'Unknown Title',
-      artist: basicInfo.author || 'Unknown Artist',
-      duration: parseInt(basicInfo.lengthSeconds || '0'),
+      artist: basicInfo.channel || 'Unknown Artist',
+      duration: parseInt(basicInfo.durationInSec || '0'),
       thumbnail,
     });
   } catch (err) {
-    console.error('YouTube stream error:', err.message);
-    res.status(500).json({ error: 'Stream failed: ' + err.message });
+    console.error('YouTube stream error:', err.message || err);
+    res.status(500).json({ error: 'Stream failed: ' + (err.message || err) });
   }
 };
