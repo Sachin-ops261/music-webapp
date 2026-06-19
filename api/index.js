@@ -1,5 +1,5 @@
 require('dotenv').config();
-const app = require('./server/app');
+const app = require('../server/app');
 
 module.exports = async (req, res) => {
   try {
