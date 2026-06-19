@@ -13,9 +13,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-// Handle OPTIONS preflight for all routes
-app.options('*', cors(corsOptions));
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return cors(corsOptions)(req, res, next);
+  }
+  next();
+});
 
 app.use(express.json());
 
