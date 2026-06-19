@@ -1,6 +1,5 @@
 // controllers/youtubeController.js
 // Pure fetch-based implementation — zero third-party YouTube packages.
-// This avoids ALL ESM/CommonJS interop issues on Vercel's Node runtime.
 
 const YT_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
 
@@ -102,8 +101,6 @@ exports.getStreamUrl = async (req, res) => {
     const { id } = req.params;
     if (!id) return res.status(400).json({ error: 'Video ID required' });
 
-    // Use the ANDROID client — it returns direct, unencrypted URLs that
-    // don't need deciphering, unlike the WEB client.
     const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${YT_API_KEY}`, {
       method: 'POST',
       headers: WEB_HEADERS,
