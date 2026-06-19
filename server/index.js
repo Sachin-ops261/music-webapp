@@ -1,10 +1,10 @@
+const dotenv = require('dotenv');
+dotenv.config(); // ✅ Load environment variables FIRST
+
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const path = require('path');
-const db = require('./config/db');
-
-dotenv.config();
+const db = require('./config/db'); // NOW it can access process.env.DATABASE_URL
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,11 +28,10 @@ app.use((req, res, next) => {
 const songRoutes = require('./routes/songs');
 app.use('/api/songs', songRoutes);
 
-// ✅ ADD YOUTUBE ROUTES HERE (BEFORE THE CATCH-ALL ROUTE!)
 const youtubeRoutes = require('./routes/youtube');
 app.use('/api/youtube', youtubeRoutes);
 
 //start server
 app.listen(PORT, () => {
     console.log(`server is running on http://localhost:${PORT}`);
-})
+});
