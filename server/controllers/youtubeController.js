@@ -1,7 +1,7 @@
 // controllers/youtubeController.js
 // Uses YouTube's internal web API directly via fetch and play-dl for reliable stream discovery.
 
-const play = require('play-dl');
+let play;
 const YT_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'; // public YouTube web client key
 
 const YT_HEADERS = {
@@ -11,6 +11,15 @@ const YT_HEADERS = {
   'X-YouTube-Client-Name': '1',
   'X-YouTube-Client-Version': '2.20231121.09.00',
 };
+
+async function getPlayDl() {
+  if (!play) {
+    const imported = await import('play-dl');
+    play = imported.default || imported;
+  }
+  return play;
+}
+
 
 function extractVideos(items) {
   const results = [];
@@ -148,6 +157,7 @@ exports.getStreamUrl = async (req, res) => {
     const { id } = req.params;
     if (!id) return res.status(400).json({ error: 'Video ID required' });
 
+    const play = await getPlayDl();
     const videoUrl = `https://www.youtube.com/watch?v=${id}`;
     if (!play.yt_validate(videoUrl)) {
       return res.status(400).json({ error: 'Invalid YouTube video ID' });
@@ -180,7 +190,7 @@ exports.getStreamUrl = async (req, res) => {
       thumbnail,
     });
   } catch (err) {
-    console.error('YouTube stream error:', err.message || err);
+    console.error('YouTube stream error:', err.stack || err);
     res.status(500).json({ error: 'Stream failed: ' + (err.message || err) });
   }
 };
