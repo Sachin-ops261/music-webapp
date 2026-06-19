@@ -9,14 +9,7 @@ console.log('ROOT ENV CHECK:', {
   CLOUDINARY_CLOUD_NAME: !!process.env.CLOUDINARY_CLOUD_NAME,
 });
 
-module.exports = async (req, res) => {
-  try {
-    await app(req, res);
-  } catch (err) {
-    console.error('Vercel function error:', err.stack || err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
+module.exports = app;
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;

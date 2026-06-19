@@ -20,7 +20,6 @@ async function getPlayDl() {
   return play;
 }
 
-
 function extractVideos(items) {
   const results = [];
   for (const item of items) {
@@ -157,9 +156,11 @@ exports.getStreamUrl = async (req, res) => {
     const { id } = req.params;
     if (!id) return res.status(400).json({ error: 'Video ID required' });
 
+    console.log('getStreamUrl called with id=', id);
     const play = await getPlayDl();
     const videoUrl = `https://www.youtube.com/watch?v=${id}`;
     if (!play.yt_validate(videoUrl)) {
+      console.log('getStreamUrl invalid id', videoUrl);
       return res.status(400).json({ error: 'Invalid YouTube video ID' });
     }
 
@@ -167,12 +168,14 @@ exports.getStreamUrl = async (req, res) => {
     const playableFormats = info.format.filter(f => {
       if (!f.url) return false;
       const isAudioOnly = f.mimeType?.startsWith('audio/');
-      const hasAudioTrack = f.hasAudio || /audio/i.test(f.mimeType || '');
+      const hasAudioTrack = f.audioChannels > 0 || /audio/i.test(f.mimeType || '');
       return isAudioOnly || hasAudioTrack;
     });
 
     const format = playableFormats
-      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0] || info.format.find(f => f.url);
+      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0] ||
+      info.format.find(f => f.audioChannels > 0 && f.url) ||
+      info.format.find(f => f.url);
 
     if (!format || !format.url) {
       return res.status(404).json({ error: 'No playable stream found' });
@@ -186,7 +189,7 @@ exports.getStreamUrl = async (req, res) => {
       mimeType: format.mimeType || 'audio/mpeg',
       title: basicInfo.title || 'Unknown Title',
       artist: basicInfo.channel || 'Unknown Artist',
-      duration: parseInt(basicInfo.durationInSec || '0'),
+      duration: parseInt(basicInfo.durationInSec || '0', 10),
       thumbnail,
     });
   } catch (err) {
